@@ -71,5 +71,12 @@ Em produção você instala o pacote (`npm i d-api-sdk`). O `sdk.html` importa d
 por ESM (esm.sh) só para rodar sem build. Ele requer **`d-api-sdk@1.1.0`** (a versão
 que adiciona o entry `connect`).
 
+### Coexistência
+
+Para manter o app WhatsApp Business no mesmo número, marque a caixa
+**"Coexistência"** nos exemplos (ou passe `mode: "coexistence"` no `connect.start()`).
+Nesse modo o cliente escaneia um QR para vincular o app; você recebe o `connectionId`
+do mesmo jeito.
+
 > Nota: nenhuma configuração da Meta (App ID / config_id) fica no seu código — isso
 > tudo vive na página hospedada da D-API.

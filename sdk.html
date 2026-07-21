@@ -45,6 +45,11 @@
   <label for="webhook">Webhook do cliente (opcional)</label>
   <input id="webhook" placeholder="https://seu-saas.com/hooks/dapi" />
 
+  <label style="font-weight:400;margin-top:14px;display:flex;gap:8px;align-items:center">
+    <input type="checkbox" id="coex" style="width:auto" />
+    Coexistência (manter o app WhatsApp Business no mesmo número)
+  </label>
+
   <!-- Prod: https://connect.d-api.cloud · Sandbox: https://connect-c2.d-api.cloud -->
   <label for="connectBase">Base do connect hospedado (D-API)</label>
   <input id="connectBase" value="https://connect.d-api.cloud" />
@@ -85,6 +90,7 @@
           connectBaseUrl: $("connectBase").value.trim(), // opcional (default: connect.d-api.cloud)
         });
         const data = await connect.start({
+          mode: $("coex").checked ? "coexistence" : "standard",
           webhookUrl: $("webhook").value.trim() || undefined,
         });
 
