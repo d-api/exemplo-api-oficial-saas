@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Exemplo (SDK) — Conectar WhatsApp API Oficial (D-API)</title>
+
+  <!--
+    EXEMPLO COM O SDK — sem build, importando `d-api-sdk/connect` por ESM (esm.sh).
+
+    O SDK embrulha todo o fluxo hospedado (popup + handshake postMessage) numa
+    única chamada `connect.start()`. Compare com o index.html, que faz o mesmo
+    "na mão" pra fins didáticos.
+
+    Em produção você normalmente instala o pacote:
+      npm i d-api-sdk
+      import { DApiConnect } from "d-api-sdk/connect";
+  -->
+
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; line-height: 1.5; }
+    h1 { font-size: 1.4rem; }
+    p.lead { color: #666; }
+    label { display: block; font-weight: 600; margin: 14px 0 4px; font-size: .9rem; }
+    input { width: 100%; padding: 8px 10px; font-size: .95rem; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; background: transparent; color: inherit; }
+    button { margin-top: 20px; padding: 12px 18px; font-size: 1rem; font-weight: 600; border: 0; border-radius: 10px; background: #128c7e; color: #fff; cursor: pointer; }
+    button:disabled { opacity: .6; cursor: progress; }
+    #result { margin-top: 20px; padding: 14px; border-radius: 10px; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: .85rem; display: none; }
+    #result.ok  { background: #e6f6f1; border: 1px solid #128c7e; }
+    #result.err { background: #fdecec; border: 1px solid #d33; }
+    small { color: #888; }
+  </style>
+</head>
+<body>
+  <h1>Conectar WhatsApp API Oficial <small>(via SDK)</small></h1>
+  <p class="lead">
+    Mesma conexão do <code>index.html</code>, mas usando o pacote
+    <code>d-api-sdk</code> — o fluxo inteiro vira uma chamada <code>connect.start()</code>.
+  </p>
+
+  <label for="pk">Sua Publishable Key (pk_live_… / pk_test_…)</label>
+  <input id="pk" placeholder="pk_live_xxxxxxxxxxxx" />
+
+  <label for="webhook">Webhook do cliente (opcional)</label>
+  <input id="webhook" placeholder="https://seu-saas.com/hooks/dapi" />
+
+  <!-- Prod: https://connect.d-api.cloud · Sandbox: https://connect-c2.d-api.cloud -->
+  <label for="connectBase">Base do connect hospedado (D-API)</label>
+  <input id="connectBase" value="https://connect.d-api.cloud" />
+
+  <button id="connect">Conectar WhatsApp API Oficial</button>
+
+  <div id="result"></div>
+
+  <p style="margin-top:28px"><small>
+    Guarde o <code>connectionId</code> e associe ao seu cliente. O envio de mensagens
+    é feito no SEU backend com a sua API key secreta — nunca a exponha no navegador.
+  </small></p>
+
+  <script type="module">
+    // Importa o SDK publicado no npm, servido como ESM pelo esm.sh (sem build).
+    import { DApiConnect } from "https://esm.sh/d-api-sdk@1.1.0/connect";
+
+    const $ = (id) => document.getElementById(id);
+    const button = $("connect");
+    const result = $("result");
+
+    function show(ok, text) {
+      result.style.display = "block";
+      result.className = ok ? "ok" : "err";
+      result.textContent = text;
+    }
+
+    button.addEventListener("click", async () => {
+      const publishableKey = $("pk").value.trim();
+      if (!publishableKey) return show(false, "Preencha a sua publishable key.");
+
+      button.disabled = true;
+      show(true, "Abrindo a conexão da D-API…");
+      try {
+        // ---- É isto: uma instância + start(). O SDK cuida de popup + handshake. ----
+        const connect = new DApiConnect({
+          publishableKey,
+          connectBaseUrl: $("connectBase").value.trim(), // opcional (default: connect.d-api.cloud)
+        });
+        const data = await connect.start({
+          webhookUrl: $("webhook").value.trim() || undefined,
+        });
+
+        show(true,
+          "✅ Conectado!\n\n" +
+          "connectionId: " + data.connectionId + "\n" +
+          "número:       " + (data.phoneNumber || "(não informado)") + "\n" +
+          "status:       " + data.status + "\n\n" +
+          "Guarde o connectionId e associe ao seu cliente."
+        );
+      } catch (err) {
+        show(false, "❌ " + (err && err.message ? err.message : String(err)));
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -49,10 +49,16 @@ Abra <http://localhost:8000>, cole a publishable key e clique em **Conectar**.
 Para testar contra o **sandbox**, troque o campo "Base do connect hospedado" para
 `https://connect-c2.d-api.cloud`.
 
-## Equivalente com o SDK
+## Dois exemplos neste repo
 
-Este exemplo faz o handshake "na mão" para ser didático. O pacote `d-api-sdk` faz
-o mesmo em uma chamada:
+| Arquivo | O que mostra |
+|---|---|
+| **`index.html`** | O fluxo "na mão" (popup + `postMessage`), em HTML puro — didático. |
+| **`sdk.html`** | O mesmo, mas com o pacote **`d-api-sdk`** — o fluxo inteiro vira uma chamada `connect.start()`. |
+
+Ambos rodam servindo a pasta por HTTP (ex.: `python3 -m http.server 8000`).
+
+### Com o SDK
 
 ```js
 import { DApiConnect } from "d-api-sdk/connect";
@@ -60,6 +66,10 @@ import { DApiConnect } from "d-api-sdk/connect";
 const connect = new DApiConnect({ publishableKey: "pk_live_…" });
 const { connectionId } = await connect.start({ webhookUrl: "https://seu-saas.com/hooks/dapi" });
 ```
+
+Em produção você instala o pacote (`npm i d-api-sdk`). O `sdk.html` importa direto
+por ESM (esm.sh) só para rodar sem build. Ele requer **`d-api-sdk@1.1.0`** (a versão
+que adiciona o entry `connect`).
 
 > Nota: nenhuma configuração da Meta (App ID / config_id) fica no seu código — isso
 > tudo vive na página hospedada da D-API.
