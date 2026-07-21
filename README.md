@@ -19,25 +19,22 @@ que você abre num **popup**. São 3 passos:
    `{ connectionId, phoneNumber, status }` por `postMessage`.
 
 > O **seu domínio não precisa ser cadastrado na Meta** — quem é cadastrado é o
-> domínio da D-API. Você só precisa: uma publishable key, e a sua origem na
-> allowlist dessa key.
+> domínio da D-API. Você só precisa de uma **publishable key**.
 
-A publishable key é **pública de propósito**: só inicia o onboarding, travada por
-lista de origens + rate limit. A sua API key **secreta** nunca vai para o navegador.
+A publishable key é **pública de propósito**: ela só inicia o onboarding (não envia
+mensagens nem lê dados) e é limitada por rate limit. A sua API key **secreta** nunca
+vai para o navegador.
 
 ## Pré-requisitos
 
-1. Uma **publishable key** com a origem deste exemplo na allowlist:
-   ```bash
-   curl -X POST https://api.d-api.cloud/api/v1/connections/cloud-api/publishable-keys \
-     -H "Authorization: <SUA_API_KEY_SECRETA>" \
-     -H "content-type: application/json" \
-     -d '{"allowedOrigins":["http://localhost:8000"]}'
-   ```
-   A resposta traz o `key` (`pk_live_...`) **uma única vez** — copie.
-
-2. A **origem** de onde você abre o exemplo (ex.: `http://localhost:8000`) precisa
-   estar em `allowedOrigins`. Senão, a D-API responde `403 Origin not allowed`.
+Uma **publishable key** (criada com a sua API key secreta, no seu backend):
+```bash
+curl -X POST https://api.d-api.cloud/api/v1/connections/cloud-api/publishable-keys \
+  -H "Authorization: <SUA_API_KEY_SECRETA>" \
+  -H "content-type: application/json" \
+  -d '{}'
+```
+A resposta traz o `key` (`pk_live_...`) **uma única vez** — copie.
 
 ## Como rodar
 
