@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Exemplo — Conectar WhatsApp API Oficial (D-API)</title>
+
+  <!--
+    EXEMPLO DIDÁTICO — HTML puro, sem framework, sem build.
+
+    Mostra como um SaaS conecta o WhatsApp API Oficial (Cloud API) do SEU cliente
+    usando a D-API como provedor.
+
+    IMPORTANTE: o Embedded Signup da Meta NÃO roda no domínio do parceiro (a Meta
+    exige que o domínio esteja cadastrado no app). Por isso o fluxo roda numa
+    página HOSPEDADA pela D-API (https://connect.d-api.cloud/connect), que você
+    abre num popup. A D-API devolve o resultado por `postMessage`. O seu domínio
+    NÃO precisa ser cadastrado na Meta.
+
+    São 3 passos (veja o <script>):
+      1. Abrir o popup da página hospedada da D-API.
+      2. Handshake: a página avisa "ready" → você envia a sua PUBLISHABLE KEY.
+      3. A D-API roda o Embedded Signup, provisiona a conexão e devolve o
+         `connectionId` por postMessage.
+
+    O pacote `d-api-sdk/connect` embrulha exatamente isto num `connect.start()`.
+    Aqui está "na mão" só para você ver o que acontece por baixo.
+  -->
+
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      max-width: 640px; margin: 40px auto; padding: 0 20px; line-height: 1.5;
+    }
+    h1 { font-size: 1.4rem; }
+    p.lead { color: #666; }
+    label { display: block; font-weight: 600; margin: 14px 0 4px; font-size: .9rem; }
+    input {
+      width: 100%; padding: 8px 10px; font-size: .95rem; box-sizing: border-box;
+      border: 1px solid #ccc; border-radius: 8px; background: transparent; color: inherit;
+    }
+    button {
+      margin-top: 20px; padding: 12px 18px; font-size: 1rem; font-weight: 600;
+      border: 0; border-radius: 10px; background: #128c7e; color: #fff; cursor: pointer;
+    }
+    button:disabled { opacity: .6; cursor: progress; }
+    #result {
+      margin-top: 20px; padding: 14px; border-radius: 10px; white-space: pre-wrap;
+      font-family: ui-monospace, monospace; font-size: .85rem; display: none;
+    }
+    #result.ok  { background: #e6f6f1; border: 1px solid #128c7e; }
+    #result.err { background: #fdecec; border: 1px solid #d33; }
+    small { color: #888; }
+  </style>
+</head>
+<body>
+  <h1>Conectar WhatsApp API Oficial</h1>
+  <p class="lead">
+    Exemplo mínimo de como o seu SaaS conecta o número oficial do WhatsApp de um
+    cliente, usando a D-API como provedor. Preencha e clique em conectar — abre um
+    popup da D-API que faz todo o Embedded Signup.
+  </p>
+
+  <!-- A publishable key, em produção, vem do seu backend/config. -->
+  <label for="pk">Sua Publishable Key (pk_live_… / pk_test_…)</label>
+  <input id="pk" placeholder="pk_live_xxxxxxxxxxxx" />
+
+  <label for="webhook">Webhook do cliente (opcional)</label>
+  <input id="webhook" placeholder="https://seu-saas.com/hooks/dapi" />
+
+  <!-- Domínio hospedado da D-API. Prod: connect.d-api.cloud · Sandbox: connect-c2.d-api.cloud -->
+  <label for="connectBase">Base do connect hospedado (D-API)</label>
+  <input id="connectBase" value="https://connect.d-api.cloud" />
+
+  <button id="connect">Conectar WhatsApp API Oficial</button>
+
+  <div id="result"></div>
+
+  <p style="margin-top:28px"><small>
+    Guarde o <code>connectionId</code> e associe ao seu cliente. O envio de mensagens
+    é feito no SEU backend com a sua API key secreta — nunca a exponha no navegador.
+  </small></p>
+
+  <script>
+    // ---------------------------------------------------------------------------
+    // connectViaDApi — abre o popup hospedado da D-API e resolve com a conexão.
+    // É exatamente o que o `d-api-sdk/connect` (DApiConnect.start) faz por dentro.
+    // ---------------------------------------------------------------------------
+    function connectViaDApi(connectBase, publishableKey, options) {
+      options = options || {};
+      const connectOrigin = connectBase.replace(/\/$/, "");
+
+      // Passo 1 — abrir o popup (precisa de gesto do usuário: veja o clique abaixo).
+      const popup = window.open(connectOrigin + "/connect", "dapi-connect", "width=600,height=760");
+      if (!popup) return Promise.reject(new Error("Popup bloqueado — permita popups."));
+
+      return new Promise((resolve, reject) => {
+        let settled = false;
+
+        function finish(fn) {
+          if (settled) return;
+          settled = true;
+          window.removeEventListener("message", onMessage);
+          clearInterval(poll);
+          try { popup.close(); } catch (e) {}
+          fn();
+        }
+
+        function onMessage(e) {
+          // Só confie na página hospedada da D-API.
+          if (e.origin !== connectOrigin || e.source !== popup) return;
+          const msg = e.data || {};
+
+          // Passo 2 — a página avisou que está pronta → mandamos a publishable key.
+          if (msg.type === "dapi-connect-ready") {
+            popup.postMessage(
+              {
+                type: "dapi-connect-init",
+                pk: publishableKey,
+                webhookUrl: options.webhookUrl,
+                webhookMode: options.webhookMode,
+              },
+              connectOrigin
+            );
+          }
+          // Passo 3 — resultado do onboarding.
+          else if (msg.type === "dapi-connect-result") {
+            finish(() =>
+              msg.ok && msg.data
+                ? resolve(msg.data)
+                : reject(new Error(msg.error || "Onboarding falhou"))
+            );
+          }
+        }
+
+        // Se o usuário fechar o popup antes de concluir, rejeita.
+        const poll = setInterval(() => {
+          if (popup.closed && !settled) finish(() => reject(new Error("Conexão cancelada (popup fechado).")));
+        }, 500);
+
+        window.addEventListener("message", onMessage);
+      });
+    }
+
+    // ---------------------------------------------------------------------------
+    // Liga o botão.
+    // ---------------------------------------------------------------------------
+    const $ = (id) => document.getElementById(id);
+    const button = $("connect");
+    const result = $("result");
+
+    function show(ok, text) {
+      result.style.display = "block";
+      result.className = ok ? "ok" : "err";
+      result.textContent = text;
+    }
+
+    button.addEventListener("click", async () => {
+      const pk = $("pk").value.trim();
+      if (!pk) return show(false, "Preencha a sua publishable key.");
+
+      button.disabled = true;
+      show(true, "Abrindo a conexão da D-API…");
+      try {
+        const data = await connectViaDApi($("connectBase").value.trim(), pk, {
+          webhookUrl: $("webhook").value.trim() || undefined,
+        });
+        show(true,
+          "✅ Conectado!\n\n" +
+          "connectionId: " + data.connectionId + "\n" +
+          "número:       " + (data.phoneNumber || "(não informado)") + "\n" +
+          "status:       " + data.status + "\n\n" +
+          "Guarde o connectionId e associe ao seu cliente."
+        );
+      } catch (err) {
+        show(false, "❌ " + (err && err.message ? err.message : String(err)));
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
