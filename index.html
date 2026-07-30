@@ -69,6 +69,15 @@
   <label for="webhook">Webhook do cliente (opcional)</label>
   <input id="webhook" placeholder="https://seu-saas.com/hooks/dapi" />
 
+  <!-- Formato dos eventos entregues nesse webhook. "normalized" (padrão) manda o
+       evento canônico da D-API — o mesmo de uma conexão não-oficial, então um só
+       handler serve as duas. "meta_passthrough" repassa o corpo cru da Meta. -->
+  <label for="webhookMode">Formato do webhook</label>
+  <select id="webhookMode" style="width:100%;padding:8px 10px;font-size:.95rem;box-sizing:border-box;border:1px solid #ccc;border-radius:8px;background:transparent;color:inherit">
+    <option value="normalized">normalized — evento canônico da D-API (padrão)</option>
+    <option value="meta_passthrough">meta_passthrough — payload cru da Meta</option>
+  </select>
+
   <label style="font-weight:400;margin-top:14px;display:flex;gap:8px;align-items:center">
     <input type="checkbox" id="coex" style="width:auto" />
     Coexistência (manter o app WhatsApp Business no mesmo número)
@@ -172,12 +181,17 @@
         const data = await connectViaDApi($("connectBase").value.trim(), pk, {
           mode: $("coex").checked ? "coexistence" : "standard",
           webhookUrl: $("webhook").value.trim() || undefined,
+          webhookMode: $("webhookMode").value, // "normalized" (padrão) | "meta_passthrough"
         });
         show(true,
           "✅ Conectado!\n\n" +
           "connectionId: " + data.connectionId + "\n" +
           "número:       " + (data.phoneNumber || "(não informado)") + "\n" +
-          "status:       " + data.status + "\n\n" +
+          "status:       " + data.status + "\n" +
+          // O access token da Meta vem junto no resultado: é SEGREDO (envia
+          // mensagem e gerencia a WABA). Mande pro SEU backend; não logue, não
+          // guarde no navegador. Aqui só mostramos o tipo — nunca o token.
+          "token:        " + (data.accessToken ? "(recebido — " + (data.accessTokenLabel || data.accessTokenKind) + ")" : "(não informado)") + "\n\n" +
           "Guarde o connectionId e associe ao seu cliente."
         );
       } catch (err) {

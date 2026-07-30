@@ -16,7 +16,8 @@ que você abre num **popup**. São 3 passos:
 2. **Handshake** — a página avisa `dapi-connect-ready`; você responde com a sua
    **publishable key** (`postMessage`). A origem do seu site é verificada pelo browser.
 3. **Resultado** — a D-API roda o Embedded Signup, provisiona a conexão e devolve
-   `{ connectionId, phoneNumber, status }` por `postMessage`.
+   `{ connectionId, phoneNumber, status, accessToken, accessTokenKind, accessTokenLabel,
+   accessTokenExpiresAt }` por `postMessage`.
 
 > O **seu domínio não precisa ser cadastrado na Meta** — quem é cadastrado é o
 > domínio da D-API. Você só precisa de uma **publishable key**.
@@ -69,7 +70,40 @@ const { connectionId } = await connect.start({ webhookUrl: "https://seu-saas.com
 
 Em produção você instala o pacote (`npm i d-api-sdk`). O `sdk.html` importa direto
 por ESM (esm.sh) só para rodar sem build. Ele requer **`d-api-sdk@1.1.0`** (a versão
-que adiciona o entry `connect`).
+que adiciona o entry `connect`) — os **tipos** de `webhookMode` e do `accessToken` no
+resultado chegam na `1.2.0`; em runtime o `1.1.0` já repassa os dois.
+
+### Formato do webhook (`webhookMode`)
+
+Os eventos da conexão chegam, por padrão, no **formato canônico da D-API**
+(`normalized`) — o mesmo de uma conexão não-oficial, então um único handler serve
+as duas. Se você já tem um parser do payload cru da Meta, peça `meta_passthrough`:
+
+```js
+await connect.start({
+  webhookUrl: "https://seu-saas.com/hooks/dapi",
+  webhookMode: "meta_passthrough", // padrão: "normalized"
+});
+```
+
+Dá pra trocar depois em `PATCH /api/v1/connections/cloud-api/:id` (`webhookMode`).
+
+### Access token da Meta
+
+O resultado traz o **access token da Meta** dessa conexão, já descriptografado:
+
+```js
+const { connectionId, accessToken, accessTokenKind, accessTokenExpiresAt } = await connect.start({...});
+// accessTokenKind: "permanent" | "long_lived" | "short_lived" | "unknown"
+```
+
+No Embedded Signup a Meta emite um **token permanente** (`permanent`,
+`accessTokenExpiresAt: null`) — é o caso normal aqui.
+
+> ⚠️ O `accessToken` é **segredo**: com ele dá pra enviar mensagens e administrar a
+> WABA. Mande direto para o **seu backend**; não logue, não salve no `localStorage`.
+> Se preferir não trafegar pelo navegador, ignore o campo e busque quando precisar em
+> `GET /api/v1/connections/cloud-api/:id/access-token` (com a sua API key secreta).
 
 ### Coexistência
 
