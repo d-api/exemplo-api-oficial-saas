@@ -50,14 +50,52 @@ Abra <http://localhost:8000>, cole a publishable key e clique em **Conectar**.
 Para testar contra o **sandbox**, troque o campo "Base do connect hospedado" para
 `https://connect-c2.d-api.cloud`.
 
-## Dois exemplos neste repo
+## Exemplos neste repo
 
 | Arquivo | O que mostra |
 |---|---|
 | **`index.html`** | O fluxo "na mão" (popup + `postMessage`), em HTML puro — didático. |
 | **`sdk.html`** | O mesmo, mas com o pacote **`d-api-sdk`** — o fluxo inteiro vira uma chamada `connect.start()`. |
+| **`useDApiConnect.js`** | O mesmo handshake como hook React, para quem mantém a própria implementação. |
 
-Ambos rodam servindo a pasta por HTTP (ex.: `python3 -m http.server 8000`).
+Os dois HTML rodam servindo a pasta por HTTP (ex.: `python3 -m http.server 8000`).
+
+## Tratando erros (leia se você fez a sua própria implementação)
+
+Quando o onboarding **falha**, a página hospedada manda:
+
+```js
+{ type: "dapi-connect-result", ok: false, error: "trial_required", errorLabel: "A conta D-API do parceiro precisa de uma assinatura ativa para criar conexões." }
+```
+
+Repare: **não vem `data`**. O erro clássico é ler `event.data.data.connectionId`
+direto, ver `undefined` e lançar um "não veio o identificador da conexão" — isso
+descarta o `error`/`errorLabel`, que é justamente o motivo da falha. Cheque o `ok`
+primeiro:
+
+```js
+if (!msg.ok) {
+  // errorLabel: texto em português para o usuário
+  // error: código estável para o seu log (trial_required, number_in_use, invalid_key, …)
+  throw Object.assign(new Error(msg.errorLabel || msg.error), { code: msg.error });
+}
+const { connectionId } = msg.data;
+```
+
+Códigos possíveis em `error`:
+
+| Código | Significa |
+|---|---|
+| `trial_required` | A conta D-API **do parceiro** não tem assinatura ativa. |
+| `number_in_use` | O número já está conectado em outra conta. |
+| `invalid_key` | Publishable key inválida, expirada ou revogada. |
+| `plan_not_ready` / `billing_not_ready` | Cobrança do parceiro não configurada. |
+| `missing_code` / `access_denied` | A Meta não devolveu o código (normalmente o usuário cancelou). |
+| `config_error` | Configuração do app Meta no servidor — falar com o suporte da D-API. |
+| `onboarding_failed` | A Meta não concluiu o cadastro do número. |
+
+O mesmo motivo também aparece **escrito na janela do connect**, com o código
+embaixo — então um print da janela já basta para o suporte.
 
 ### Com o SDK
 
