@@ -17,6 +17,27 @@ import { useCallback, useRef } from "react";
 const CONNECT_ORIGIN_DEFAULT = "https://connect.d-api.cloud";
 // Sandbox: https://connect-c2.d-api.cloud
 
+/** Teto do metadata, em bytes de JSON serializado (o mesmo que o SDK aplica). */
+const METADATA_MAX_BYTES = 512;
+
+/** Mensagem de erro quando o metadata quebra o contrato; null quando está ok. */
+function validateMetadata(metadata) {
+  if (metadata === undefined || metadata === null) return null;
+  if (typeof metadata !== "object" || Array.isArray(metadata)) {
+    return "metadata deve ser um objeto JSON";
+  }
+  let serialized;
+  try {
+    serialized = JSON.stringify(metadata);
+  } catch {
+    return "metadata deve ser serializável em JSON";
+  }
+  if (new TextEncoder().encode(serialized).length > METADATA_MAX_BYTES) {
+    return `metadata acima do limite de ${METADATA_MAX_BYTES} bytes serializados`;
+  }
+  return null;
+}
+
 export function useDApiConnect({ publishableKey, connectBaseUrl }) {
   const connectOrigin = (connectBaseUrl || CONNECT_ORIGIN_DEFAULT).replace(/\/$/, "");
   const runningRef = useRef(false);
@@ -24,6 +45,12 @@ export function useDApiConnect({ publishableKey, connectBaseUrl }) {
   const start = useCallback(
     (options = {}) => {
       if (runningRef.current) return Promise.reject(new Error("Conexão já em andamento."));
+
+      // `metadata` viaja na URL do diálogo da Meta, então tem teto: 512 bytes
+      // de JSON. Valide ANTES de abrir a janela, para o erro aparecer no seu
+      // código e não numa popup que você não controla.
+      const metadataError = validateMetadata(options.metadata);
+      if (metadataError) return Promise.reject(new Error(metadataError));
 
       // window.open PRECISA sair de um gesto do usuário (o clique). Não coloque
       // um await antes desta linha, ou o browser bloqueia o popup.
@@ -68,6 +95,7 @@ export function useDApiConnect({ publishableKey, connectBaseUrl }) {
                 mode: options.mode || "standard", // "standard" | "coexistence"
                 webhookUrl: options.webhookUrl,
                 webhookMode: options.webhookMode, // "normalized" (padrão) | "meta_passthrough"
+                metadata: options.metadata, // JSON livre seu; volta no webhook session.created
               },
               connectOrigin
             );
@@ -102,6 +130,10 @@ export function useDApiConnect({ publishableKey, connectBaseUrl }) {
           finish(() => resolve(data));
         }
 
+        // ⚠️ MOBILE: no celular a "popup" abre como aba e o postMessage de volta
+        // não acontece, então este reject dispara mesmo quando a conexão FOI
+        // criada. Não trate como falha: confirme pelo webhook `session.created`
+        // (ou pela rota de listagem de conexões) antes de mostrar erro.
         const poll = setInterval(() => {
           if (popup.closed && !settled) {
             finish(() => reject(new Error("Conexão cancelada (popup fechado).")));

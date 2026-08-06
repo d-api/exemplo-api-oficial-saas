@@ -78,6 +78,11 @@
     <option value="meta_passthrough">meta_passthrough — payload cru da Meta</option>
   </select>
 
+  <!-- JSON livre seu, guardado com a conexão e devolvido no webhook
+       `session.created`. É o que liga a conexão ao seu cliente sem depender do
+       retorno da popup — no mobile ele não chega. Teto: 512 bytes de JSON. -->
+  <label for="metadata">metadata (JSON, opcional)</label>
+  <input id="metadata" placeholder='{"tenantId":"acme-42"}' />
   <label style="font-weight:400;margin-top:14px;display:flex;gap:8px;align-items:center">
     <input type="checkbox" id="coex" style="width:auto" />
     Coexistência (manter o app WhatsApp Business no mesmo número)
@@ -135,6 +140,7 @@
                 mode: options.mode || "standard",
                 webhookUrl: options.webhookUrl,
                 webhookMode: options.webhookMode,
+                metadata: options.metadata, // JSON livre seu; volta no session.created
               },
               connectOrigin
             );
@@ -162,6 +168,24 @@
     // Liga o botão.
     // ---------------------------------------------------------------------------
     const $ = (id) => document.getElementById(id);
+
+    /** Lê o campo metadata do formulário. Lança com mensagem clara se não for
+     *  um objeto JSON válido — o mesmo contrato que o backend revalida. */
+    function readMetadata() {
+      const raw = $("metadata").value.trim();
+      if (!raw) return undefined;
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        throw new Error("metadata não é um JSON válido.");
+      }
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        throw new Error("metadata deve ser um objeto JSON, ex.: {\"tenantId\":\"acme-42\"}");
+      }
+      return parsed;
+    }
+
     const button = $("connect");
     const result = $("result");
 
@@ -182,6 +206,7 @@
           mode: $("coex").checked ? "coexistence" : "standard",
           webhookUrl: $("webhook").value.trim() || undefined,
           webhookMode: $("webhookMode").value, // "normalized" (padrão) | "meta_passthrough"
+          metadata: readMetadata(),
         });
         show(true,
           "✅ Conectado!\n\n" +

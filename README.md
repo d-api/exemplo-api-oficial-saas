@@ -90,7 +90,7 @@ Códigos possíveis em `error`:
 | `number_in_use` | O número já está conectado em outra conta. |
 | `invalid_key` | Publishable key inválida, expirada ou revogada. |
 | `plan_not_ready` / `billing_not_ready` | Cobrança do parceiro não configurada. |
-| `missing_code` / `access_denied` | A Meta não devolveu o código (normalmente o usuário cancelou). |
+| `missing_code` / `access_denied` / `user_denied` | A Meta não devolveu o código — normalmente o usuário cancelou o diálogo. A janela volta para a página do connect (que fecha sozinha pelo SDK), nunca para uma tela da D-API. |
 | `config_error` | Configuração do app Meta no servidor — falar com o suporte da D-API. |
 | `onboarding_failed` | A Meta não concluiu o cadastro do número. |
 
@@ -110,6 +110,69 @@ Em produção você instala o pacote (`npm i d-api-sdk`). O `sdk.html` importa d
 por ESM (esm.sh) só para rodar sem build. Ele requer **`d-api-sdk@1.1.0`** (a versão
 que adiciona o entry `connect`) — os **tipos** de `webhookMode` e do `accessToken` no
 resultado chegam na `1.2.0`; em runtime o `1.1.0` já repassa os dois.
+
+### No mobile, o resultado só chega por webhook
+
+A conexão é anunciada **duas vezes**, sem nada para configurar: o `start()`
+resolve no navegador e um webhook `session.created` vai para o `webhookUrl`
+daquela conexão, com todos os dados (inclusive o access token e o seu
+`metadata`).
+
+O segundo existe por causa do celular: lá a "popup" abre como **aba**, sem
+`window.opener` utilizável, então o `postMessage` de volta nunca acontece. Na
+prática o `start()` pode rejeitar com "Conexão cancelada (popup fechado)"
+**mesmo com a conexão criada** — em webview de app nativo vale o mesmo.
+
+⚠️ Em fluxo mobile, não trate essa rejeição como falha: confirme pelo
+`session.created` (ou pela rota de listagem de conexões) antes de mostrar erro
+para o seu cliente.
+
+### Ligar a conexão ao seu cliente (`metadata`)
+
+`metadata` é um JSON livre seu, guardado com a conexão e devolvido intacto em
+`data.metadata` do `session.created`. É o que permite achar o tenant certo sem
+depender do retorno síncrono:
+
+```js
+await connect.start({
+  webhookUrl: "https://seu-saas.com/hooks/dapi",
+  metadata: { tenantId: "acme-42" },
+});
+```
+
+O evento chega assim:
+
+```json
+{
+  "event": "session.created",
+  "sessionId": "cloud-9f2c1e5a-…",
+  "timestamp": "2026-08-02T12:00:00.000Z",
+  "data": {
+    "connectionId": "9f2c1e5a-…",
+    "connectionType": "cloud_api",
+    "status": "connected",
+    "wabaId": "123456789",
+    "phoneNumberId": "987654321",
+    "phoneNumber": "+5511999999999",
+    "verifiedName": "Acme Ltda",
+    "accessToken": "EAAG…",
+    "accessTokenKind": "long_lived",
+    "accessTokenExpiresAt": "2026-10-01T00:00:00.000Z",
+    "webhookMode": "normalized",
+    "metadata": { "tenantId": "acme-42" }
+  }
+}
+```
+
+Limite: **512 bytes** de JSON serializado — o valor viaja na URL do diálogo da
+Meta, e acima disso o `start()` lança antes de abrir a janela. Guarde
+identificadores ali, não objetos de negócio inteiros.
+
+Como o payload carrega o access token, o evento só é entregue no `webhookUrl`
+**da própria conexão** e apenas por **HTTPS**; um endpoint `http://` é recusado.
+
+`metadata` é opcional e novo na versão **1.3.0** do `d-api-sdk` — quem está na
+1.2.0 ou anterior continua funcionando igual, e recebe `metadata: {}` no evento.
 
 ### Formato do webhook (`webhookMode`)
 
